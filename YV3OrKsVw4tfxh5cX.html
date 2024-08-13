@@ -1,0 +1,185 @@
+<html><head><base href="https://websimai.com/video-frame-extractor/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrator de Todos os Frames de Vídeo com Download (Versão Corrigida)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #videoContainer, #frameContainer {
+            margin-top: 20px;
+        }
+        #frameContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .frame {
+            margin: 10px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #downloadButton {
+            background-color: #3498db;
+        }
+        #downloadButton:hover {
+            background-color: #2980b9;
+        }
+        #progress {
+            width: 100%;
+            background-color: #ddd;
+            margin-top: 20px;
+        }
+        #progressBar {
+            width: 0%;
+            height: 30px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Extrator de Todos os Frames de Vídeo com Download (Versão Corrigida)</h1>
+    <input type="file" id="videoInput" accept="video/*">
+    <div id="videoContainer"></div>
+    <button id="extractFrames">Extrair Todos os Frames</button>
+    <button id="downloadButton" style="display: none;">Download Frames (ZIP)</button>
+    <div id="progress">
+        <div id="progressBar"></div>
+    </div>
+    <div id="frameContainer"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const videoContainer = document.getElementById('videoContainer');
+        const extractButton = document.getElementById('extractFrames');
+        const downloadButton = document.getElementById('downloadButton');
+        const frameContainer = document.getElementById('frameContainer');
+        const progressBar = document.getElementById('progressBar');
+
+        let video;
+        let frames = [];
+
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const videoURL = URL.createObjectURL(file);
+            
+            video = document.createElement('video');
+            video.src = videoURL;
+            video.controls = true;
+            video.style.maxWidth = '100%';
+            
+            videoContainer.innerHTML = '';
+            videoContainer.appendChild(video);
+        });
+
+        extractButton.addEventListener('click', () => {
+            if (!video) {
+                alert('Por favor, selecione um vídeo primeiro.');
+                return;
+            }
+
+            frameContainer.innerHTML = '';
+            frames = [];
+            extractAllFrames();
+        });
+
+        async function extractAllFrames() {
+            video.currentTime = 0;
+            let frameCount = 0;
+            const fps = 30; // Assumindo 30 fps
+            const totalFrames = Math.floor(video.duration * fps);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            while (video.currentTime < video.duration) {
+                await new Promise(resolve => {
+                    video.onseeked = resolve;
+                    video.currentTime = frameCount / fps;
+                });
+
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const frameNumber = frameCount + 1;
+                const frameDiv = document.createElement('div');
+                frameDiv.className = 'frame';
+                frameDiv.innerHTML = `
+                    <canvas width="${canvas.width}" height="${canvas.height}"></canvas>
+                    <p>Frame ${frameNumber}</p>
+                `;
+                frameContainer.appendChild(frameDiv);
+
+                const frameCanvas = frameDiv.querySelector('canvas');
+                frameCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+                frames.push({
+                    number: frameNumber,
+                    dataURL: canvas.toDataURL('image/png')
+                });
+
+                frameCount++;
+                
+                // Atualiza a barra de progresso
+                const progress = (frameCount / totalFrames) * 100;
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = Math.round(progress) + '%';
+
+                // Dá um tempo para o navegador atualizar a interface
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            console.log('Extração concluída');
+            downloadButton.style.display = 'block';
+        }
+
+        downloadButton.addEventListener('click', async () => {
+            const zip = new JSZip();
+
+            frames.forEach(frame => {
+                const imgData = frame.dataURL.split('base64,')[1];
+                zip.file(`frame_${frame.number.toString().padStart(5, '0')}.png`, imgData, {base64: true});
+            });
+
+            try {
+                const content = await zip.generateAsync({type: 'blob'});
+                saveAs(content, 'video_frames.zip');
+            } catch (error) {
+                console.error('Erro ao gerar o arquivo ZIP:', error);
+                alert('Ocorreu um erro ao gerar o arquivo ZIP. Por favor, tente novamente.');
+            }
+        });
+    </script>
+</body>
+</html>
