@@ -1,0 +1,586 @@
+<html><head><base href="https://websimai.com/image-sequence-generator/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Sequência de Imagens e Compilador de Vídeo HD com Áudio</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --background-color: #f0f8ff;
+            --text-color: #34495e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        h1, h2 {
+            text-align: center;
+            color: var(--primary-color);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        #imageContainer, #extractedImagesContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 15px;
+        }
+        .image {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .image:hover {
+            transform: scale(1.05);
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        button, textarea, input, select {
+            display: block;
+            margin: 15px auto;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            outline: none;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        textarea {
+            width: 90%;
+            height: 200px;
+            resize: vertical;
+            border: 1px solid #bdc3c7;
+        }
+        #progress, #compileProgress {
+            width: 100%;
+            background-color: #ecf0f1;
+            margin-top: 20px;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        #errorMessage {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .control-group {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        #videoContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        video {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Gerador de Sequência de Imagens e Compilador de Vídeo HD com Áudio</h1>
+    
+    <div class="control-group">
+        <textarea id="sequenceDescription" placeholder="Digite um prompt específico para cada imagem, separado por linhas. Exemplo:
+Imagem 1: Gato andando
+Imagem 2: Homem correndo
+Imagem 3: Pássaro voando
+..."></textarea>
+        <input type="number" id="imageCount" value="5" min="1" max="1000" placeholder="Número de imagens">
+        
+        <button id="generateStory">Gerar História Automática</button>
+        <button id="generateImages">Gerar Sequência de Imagens</button>
+        <button id="extractImages">Extrair Imagens Geradas</button>
+        <button id="cleanupInvalidImages">Limpar Imagens Inválidas</button>
+        <button id="previewImages">Prévia de Imagens</button>
+    </div>
+    
+    <div class="control-group">
+        <div>
+            <input type="checkbox" id="useExtractedImages">
+            <label for="useExtractedImages">Usar imagens extraídas</label>
+        </div>
+        
+        <div class="slider-container">
+            <label for="frameDuration">Duração do frame (ms):</label>
+            <input type="range" id="frameDurationSlider" min="33" max="1000" value="100">
+            <input type="number" id="frameDuration" value="100" min="33" max="1000">
+        </div>
+        
+        <button id="compileVideo">Compilar em Vídeo HD</button>
+    </div>
+    
+    <div id="videoContainer"></div>
+    
+    <div id="imageContainer"></div>
+    <div id="extractedImagesContainer"></div>
+    <div id="progress"></div>
+    <div id="compileProgress"></div>
+    <div id="errorMessage"></div>
+
+    <script>
+        const generateButton = document.getElementById('generateImages');
+        const generateStoryButton = document.getElementById('generateStory');
+        const extractButton = document.getElementById('extractImages');
+        const cleanupButton = document.getElementById('cleanupInvalidImages');
+        const previewButton = document.getElementById('previewImages');
+        const compileVideoButton = document.getElementById('compileVideo');
+        const imageContainer = document.getElementById('imageContainer');
+        const extractedImagesContainer = document.getElementById('extractedImagesContainer');
+        const progressBar = document.getElementById('progress');
+        const compileProgressBar = document.getElementById('compileProgress');
+        const sequenceDescription = document.getElementById('sequenceDescription');
+        const imageCountInput = document.getElementById('imageCount');
+        const errorMessage = document.getElementById('errorMessage');
+        const frameDurationSlider = document.getElementById('frameDurationSlider');
+        const frameDurationInput = document.getElementById('frameDuration');
+        const videoContainer = document.getElementById('videoContainer');
+
+        let images = [];
+        let extractedImages = [];
+        let prompterAudio = null;
+
+        generateButton.addEventListener('click', generateImageSequence);
+        generateStoryButton.addEventListener('click', generateAutomaticStory);
+        extractButton.addEventListener('click', extractImagesFromSite);
+        cleanupButton.addEventListener('click', cleanupInvalidImages);
+        previewButton.addEventListener('click', showImagePreview);
+        compileVideoButton.addEventListener('click', compileVideo);
+        frameDurationSlider.addEventListener('input', updateFrameDuration);
+        frameDurationInput.addEventListener('change', updateFrameDurationFromInput);
+
+        async function generateAutomaticStory() {
+            const imageCount = parseInt(imageCountInput.value);
+            const story = generateStoryPrompt(imageCount);
+            sequenceDescription.value = story;
+        }
+
+        function generateStoryPrompt(imageCount) {
+            const storyElements = [
+                "Um jovem herói parte em uma jornada épica",
+                "Enfrenta desafios e obstáculos imprevistos",
+                "Encontra aliados improváveis ao longo do caminho",
+                "Descobre um poder oculto dentro de si",
+                "Confronta o vilão em uma batalha climática",
+                "Retorna para casa transformado pela experiência"
+            ];
+
+            let story = "";
+            for (let i = 0; i < imageCount; i++) {
+                const elementIndex = i % storyElements.length;
+                story += `Imagem ${i + 1}: ${storyElements[elementIndex]}\n`;
+            }
+
+            return story;
+        }
+
+        async function generateImageSequence() {
+            const prompts = sequenceDescription.value.trim().split('\n');
+            if (prompts.length === 0 || prompts[0] === '') {
+                alert('Por favor, forneça pelo menos um prompt para gerar imagens.');
+                return;
+            }
+
+            imageContainer.innerHTML = '';
+            images = [];
+            const numImages = parseInt(imageCountInput.value);
+
+            progressBar.textContent = 'Gerando imagens...';
+
+            try {
+                for (let i = 0; i < numImages; i++) {
+                    const imageNumber = i + 1;
+                    const progress = ((i + 1) / numImages) * 100;
+                    
+                    const promptIndex = i % prompts.length;
+                    const prompt = prompts[promptIndex].replace(/^Imagem \d+:\s*/i, '').trim();
+                    
+                    const imageUrl = await generateWebSimImage(prompt);
+                    
+                    const imageDiv = document.createElement('div');
+                    imageDiv.classList.add('image');
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = `Imagem ${imageNumber}: ${prompt}`;
+                    imageDiv.appendChild(img);
+                    imageContainer.appendChild(imageDiv);
+
+                    images.push({
+                        number: imageNumber,
+                        url: imageUrl,
+                        prompt: prompt
+                    });
+
+                    progressBar.textContent = `Imagem ${imageNumber} de ${numImages} (${progress.toFixed(2)}%)`;
+
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                progressBar.textContent = 'Todas as imagens foram geradas com sucesso!';
+            } catch (error) {
+                console.error('Erro ao gerar imagens:', error);
+                errorMessage.textContent = `Erro ao gerar imagens: ${error.message}. Por favor, tente novamente.`;
+            }
+        }
+
+        async function generateWebSimImage(prompt) {
+            // Implemente a lógica para gerar imagens usando o WebSim aqui
+            // Por enquanto, retornaremos uma URL de placeholder de alta resolução
+            return `https://via.placeholder.com/1920x1080?text=${encodeURIComponent(prompt)}`;
+        }
+
+        function extractImagesFromSite() {
+            const imageElements = document.querySelectorAll('#imageContainer img');
+            
+            extractedImages = [];
+            extractedImagesContainer.innerHTML = '';
+
+            for (let img of imageElements) {
+                const imageUrl = img.src;
+                const alt = img.alt;
+                
+                // Verifica se a imagem foi realmente gerada (não é um placeholder)
+                if (!imageUrl.includes('placeholder.com')) {
+                    extractedImages.push({
+                        url: imageUrl,
+                        alt: alt
+                    });
+
+                    const imageDiv = document.createElement('div');
+                    imageDiv.classList.add('image');
+                    const imgElement = document.createElement('img');
+                    imgElement.src = imageUrl;
+                    imgElement.alt = alt || 'Extracted Image';
+                    imageDiv.appendChild(imgElement);
+                    extractedImagesContainer.appendChild(imageDiv);
+                }
+            }
+
+            alert(`Extraídas ${extractedImages.length} imagens geradas do site.`);
+        }
+
+        function cleanupInvalidImages() {
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToClean = useExtractedImages ? extractedImages : images;
+
+            const validImages = imagesToClean.filter(image => {
+                const img = new Image();
+                img.src = image.url;
+                return img.complete && img.naturalWidth !== 0 && !isEmptyImage(img) && !isPlaceholderImage(img);
+            });
+
+            if (useExtractedImages) {
+                extractedImages = validImages;
+                updateImageContainer(extractedImagesContainer, validImages);
+            } else {
+                images = validImages;
+                updateImageContainer(imageContainer, validImages);
+            }
+
+            const removedCount = imagesToClean.length - validImages.length;
+            alert(`Limpeza concluída. ${removedCount} imagens inválidas ou vazias foram removidas.`);
+        }
+
+        function isEmptyImage(img) {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            return imageData.data.every(channel => channel === 0 || channel === 255);
+        }
+
+        function isPlaceholderImage(img) {
+            return img.src.includes('placeholder.com');
+        }
+
+        function updateImageContainer(container, images) {
+            container.innerHTML = '';
+            images.forEach(image => {
+                const imageDiv = document.createElement('div');
+                imageDiv.classList.add('image');
+                const imgElement = document.createElement('img');
+                imgElement.src = image.url;
+                imgElement.alt = image.alt || `Imagem ${image.number}: ${image.prompt}`;
+                imageDiv.appendChild(imgElement);
+                container.appendChild(imageDiv);
+            });
+        }
+
+        function showImagePreview() {
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToUse = useExtractedImages ? extractedImages : images;
+
+            const previewContainer = document.createElement('div');
+            previewContainer.style.display = 'flex';
+            previewContainer.style.flexWrap = 'wrap';
+            previewContainer.style.justifyContent = 'center';
+            previewContainer.style.gap = '10px';
+
+            imagesToUse.forEach((image, index) => {
+                const imgElement = document.createElement('img');
+                imgElement.src = image.url;
+                imgElement.alt = `Preview ${index + 1}: ${image.prompt || ''}`;
+                imgElement.style.width = '150px';
+                imgElement.style.height = '150px';
+                imgElement.style.objectFit = 'cover';
+                imgElement.style.borderRadius = '5px';
+                previewContainer.appendChild(imgElement);
+            });
+
+            const previewDialog = document.createElement('dialog');
+            previewDialog.style.maxWidth = '90%';
+            previewDialog.style.maxHeight = '90%';
+            previewDialog.style.overflow = 'auto';
+            previewDialog.style.padding = '20px';
+            previewDialog.style.borderRadius = '10px';
+            previewDialog.appendChild(previewContainer);
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Fechar Prévia';
+            closeButton.style.marginTop = '20px';
+            closeButton.onclick = () => previewDialog.close();
+            previewDialog.appendChild(closeButton);
+
+            document.body.appendChild(previewDialog);
+            previewDialog.showModal();
+        }
+
+        function generateAudio(text, rate = 1) {
+            return new Promise((resolve) => {
+                const synth = window.speechSynthesis;
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'pt-BR';
+                utterance.rate = rate;
+                utterance.onend = () => resolve();
+                synth.speak(utterance);
+            });
+        }
+
+        async function compileVideo() {
+            compileProgressBar.style.display = 'block';
+            compileProgressBar.textContent = 'Preparando...';
+            errorMessage.textContent = '';
+
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToUse = useExtractedImages ? extractedImages : images;
+            const frameDuration = parseInt(document.getElementById('frameDuration').value);
+
+            if (imagesToUse.length === 0) {
+                alert('Nenhuma imagem disponível para compilar o vídeo.');
+                compileProgressBar.style.display = 'none';
+                return;
+            }
+
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const stream = canvas.captureStream(30);
+
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 8000000
+                });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    try {
+                        const videoUrl = URL.createObjectURL(blob);
+
+                        compileProgressBar.textContent = 'Vídeo compilado com sucesso!';
+
+                        videoContainer.innerHTML = '';
+                        const videoElement = document.createElement('video');
+                        videoElement.src = videoUrl;
+                        videoElement.controls = true;
+                        videoContainer.appendChild(videoElement);
+
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = videoUrl;
+                        downloadLink.download = 'sequencia_video_hd.webm';
+                        downloadLink.textContent = 'Baixar Vídeo HD WebM';
+                        downloadLink.style.display = 'block';
+                        downloadLink.style.marginTop = '20px';
+                        videoContainer.appendChild(downloadLink);
+
+                        const playWithPromptButton = document.createElement('button');
+                        playWithPromptButton.textContent = 'Reproduzir Prompter';
+                        playWithPromptButton.style.display = 'block';
+                        playWithPromptButton.style.marginTop = '10px';
+                        playWithPromptButton.onclick = togglePrompter;
+                        videoContainer.appendChild(playWithPromptButton);
+
+                        // Adicionar controle de velocidade da fala
+                        const speechRateControl = document.createElement('div');
+                        speechRateControl.innerHTML = `
+                            <label for="speechRate">Velocidade da fala:</label>
+                            <input type="range" id="speechRate" min="0.5" max="2" step="0.1" value="1">
+                            <span id="speechRateValue">1x</span>
+                        `;
+                        videoContainer.appendChild(speechRateControl);
+
+                        const speechRateSlider = document.getElementById('speechRate');
+                        const speechRateValue = document.getElementById('speechRateValue');
+
+                        speechRateSlider.oninput = () => {
+                            const rate = parseFloat(speechRateSlider.value);
+                            speechRateValue.textContent = `${rate.toFixed(1)}x`;
+                        };
+
+                        // Adicionar controle de velocidade do vídeo
+                        addVideoSpeedControl();
+
+                        window.scrollTo(0, 0);
+                    } catch (error) {
+                        console.error('Erro ao criar URL do objeto:', error);
+                        errorMessage.textContent = `Erro ao criar URL do objeto: ${error.message}. Por favor, tente novamente.`;
+                    }
+                };
+
+                mediaRecorder.start();
+
+                for (let i = 0; i < imagesToUse.length; i++) {
+                    const image = imagesToUse[i];
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.src = image.url;
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = () => reject(new Error(`Falha ao carregar a imagem ${i + 1}`));
+                    });
+
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    const progress = ((i + 1) / imagesToUse.length) * 100;
+                    compileProgressBar.textContent = `Processando imagem ${i + 1} de ${imagesToUse.length} (${progress.toFixed(2)}%)`;
+
+                    await new Promise(resolve => setTimeout(resolve, frameDuration));
+                }
+
+                mediaRecorder.stop();
+
+            } catch (error) {
+                console.error('Erro ao compilar vídeo:', error);
+                compileProgressBar.textContent = 'Erro ao compilar vídeo.';
+                errorMessage.textContent = `Erro ao compilar vídeo: ${error.message}. Por favor, tente novamente.`;
+            }
+        }
+
+        function updateFrameDuration() {
+            const frameDuration = parseInt(frameDurationSlider.value);
+            frameDurationInput.value = frameDuration;
+        }
+
+        function updateFrameDurationFromInput() {
+            const frameDuration = parseInt(frameDurationInput.value);
+            frameDurationSlider.value = frameDuration;
+        }
+
+        function stopPrompter() {
+            if (prompterAudio) {
+                window.speechSynthesis.cancel();
+                prompterAudio = null;
+            }
+        }
+
+        function updatePlayWithPromptButton() {
+            const playWithPromptButton = document.querySelector('#videoContainer button:last-of-type');
+            if (playWithPromptButton) {
+                playWithPromptButton.textContent = prompterAudio ? 'Parar Prompter' : 'Reproduzir Prompter';
+            }
+        }
+
+        function togglePrompter() {
+            const videoElement = document.querySelector('#videoContainer video');
+            if (!videoElement) return;
+
+            if (prompterAudio) {
+                stopPrompter();
+            } else {
+                videoElement.play();
+                const speechRateSlider = document.getElementById('speechRate');
+                const speechRate = parseFloat(speechRateSlider.value);
+                
+                prompterAudio = generateAudio(sequenceDescription.value, speechRate);
+                prompterAudio.then(() => {
+                    prompterAudio = null;
+                    updatePlayWithPromptButton();
+                });
+            }
+            updatePlayWithPromptButton();
+        }
+
+        function addVideoSpeedControl() {
+            const videoSpeedControl = document.createElement('div');
+            videoSpeedControl.innerHTML = `
+                <label for="videoPlaybackRate">Velocidade do vídeo:</label>
+                <input type="range" id="videoPlaybackRate" min="0.1" max="4" step="0.1" value="1">
+                <span id="videoPlaybackRateValue">1x</span>
+            `;
+            videoContainer.appendChild(videoSpeedControl);
+
+            const videoPlaybackRateSlider = document.getElementById('videoPlaybackRate');
+            const videoPlaybackRateValue = document.getElementById('videoPlaybackRateValue');
+            const videoElement = document.querySelector('#videoContainer video');
+
+            videoPlaybackRateSlider.oninput = () => {
+                const rate = parseFloat(videoPlaybackRateSlider.value);
+                videoPlaybackRateValue.textContent = `${rate.toFixed(1)}x`;
+                if (videoElement) {
+                    videoElement.playbackRate = rate;
+                }
+            };
+        }
+
+        // Event listener for compileVideo button
+        compileVideoButton.addEventListener('click', compileVideo);
+
+        // Initialize the frame duration slider and input
+        updateFrameDuration();
+    </script>
+</body>
+</html>
