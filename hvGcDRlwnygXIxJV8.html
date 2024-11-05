@@ -1,0 +1,1161 @@
+<html><head><base href="https://websimai.com/image-sequence-generator/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Sequência de Imagens e Compilador de Vídeo HD com Áudio</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --background-color: #f0f8ff;
+            --text-color: #34495e;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        h1, h2 {
+            text-align: center;
+            color: var(--primary-color);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        #imageContainer, #extractedImagesContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 15px;
+            position: relative;
+        }
+        .image {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .image:hover {
+            transform: scale(1.05);
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        button, textarea, input, select {
+            display: block;
+            margin: 15px auto;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            outline: none;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        textarea {
+            width: 90%;
+            height: 200px;
+            resize: vertical;
+            border: 1px solid #bdc3c7;
+        }
+        #progress, #compileProgress {
+            width: 100%;
+            background-color: #ecf0f1;
+            margin-top: 20px;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        #errorMessage {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        .control-group {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        #videoContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        video {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .control-group input[type="text"] {
+            width: 90%;
+            margin: 10px auto;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+        }
+        .quantum-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            mix-blend-mode: overlay;
+            background: radial-gradient(
+                circle at center,
+                transparent 0%,
+                rgba(0,0,0,0.1) 50%, 
+                transparent 100%
+            );
+            animation: quantumPulse 2s infinite;
+            pointer-events: none;
+        }
+        @keyframes quantumPulse {
+            0% {
+                transform: scale(1);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.5); 
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+        .custom-file-input {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            border: 2px dashed var(--primary-color);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .preview-container {
+            max-width: 300px;
+            margin: 20px auto;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .sequence-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 500px;
+        }
+        .sequence-controls input[type="range"] {
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.9.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.1/dist/posenet.min.js"></script>
+</head>
+<body>
+    <h1>Gerador de Sequência de Imagens e Compilador de Vídeo HD com Áudio</h1>
+    
+    <div class="control-group">
+        <textarea id="sequenceDescription" placeholder="Digite um prompt específico para cada imagem, separado por linhas. Exemplo:
+Imagem 1: Gato andando
+Imagem 2: Homem correndo
+Imagem 3: Pássaro voando
+..."></textarea>
+        <input type="text" id="storyTheme" placeholder="Tema da história (opcional)">
+        <input type="number" id="imageCount" value="5" min="1" max="1000" placeholder="Número de imagens">
+        
+        <button id="generateStory">Gerar História Automática</button>
+        <button id="generateImages">Gerar Sequência de Imagens</button>
+        <button id="extractImages">Extrair Imagens Geradas</button>
+        <button id="cleanupInvalidImages">Limpar Imagens Inválidas</button>
+        <button id="previewImages">Prévia de Imagens</button>
+        <button id="enableInterpolation">Ativar Interpolação de Quadros IA</button>
+        
+        <div>
+            <input type="checkbox" id="enableTransitions">
+            <label for="enableTransitions">Ativar Transições Aleatórias</label>
+        </div>
+        <div>
+            <input type="checkbox" id="enableDiffusionEffect">
+            <label for="enableDiffusionEffect">Aplicar Efeito de Difusão Quântica</label>
+        </div>
+        <div class="slider-container">
+            <label for="diffusionIntensity">Intensidade da Difusão:</label>
+            <input type="range" id="diffusionIntensity" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        <div>
+            <input type="checkbox" id="addBackgroundMusic">
+            <label for="addBackgroundMusic">Adicionar Música de Fundo</label>
+        </div>
+        <div>
+            <input type="checkbox" id="enableProceduralEffect">
+            <label for="enableProceduralEffect">Ativar Efeito Procedural Quântico</label>
+        </div>
+        <button id="surpriseMeButton">Surpreenda-me!</button>
+    </div>
+
+    <div class="control-group">
+        <h3>Upload Reference Image</h3>
+        <input type="file" id="imageUpload" accept="image/*" class="custom-file-input">
+        <div id="uploadPreview" class="preview-container">
+            <img id="previewImage" style="display:none; max-width: 300px;">
+        </div>
+        <button id="generateFromUpload">Generate Sequence from Upload</button>
+        
+        <div>
+            <input type="checkbox" id="useExtractedImages">
+            <label for="useExtractedImages">Usar imagens extraídas</label>
+        </div>
+        
+        <div class="slider-container">
+            <label for="frameDuration">Duração do frame (ms):</label>
+            <input type="range" id="frameDurationSlider" min="33" max="1000" value="100">
+            <input type="number" id="frameDuration" value="100" min="33" max="1000">
+        </div>
+        
+        <button id="compileVideo">Compilar em Vídeo HD</button>
+    </div>
+
+    <div id="videoContainer"></div>
+    
+    <div id="imageContainer"></div>
+    <div id="extractedImagesContainer"></div>
+    <div id="progress"></div>
+    <div id="compileProgress"></div>
+    <div id="errorMessage"></div>
+
+    <script>
+        let bodyPixNet;
+        let posenetModel;
+        (async () => {
+            bodyPixNet = await bodyPix.load();
+            posenetModel = await posenet.load();
+        })();
+
+        const generateButton = document.getElementById('generateImages');
+        const generateStoryButton = document.getElementById('generateStory');
+        const extractButton = document.getElementById('extractImages');
+        const cleanupButton = document.getElementById('cleanupInvalidImages');
+        const previewButton = document.getElementById('previewImages');
+        const compileVideoButton = document.getElementById('compileVideo');
+        const imageContainer = document.getElementById('imageContainer');
+        const extractedImagesContainer = document.getElementById('extractedImagesContainer');
+        const progressBar = document.getElementById('progress');
+        const compileProgressBar = document.getElementById('compileProgress');
+        const sequenceDescription = document.getElementById('sequenceDescription');
+        const storyThemeInput = document.getElementById('storyTheme');
+        const imageCountInput = document.getElementById('imageCount');
+        const errorMessage = document.getElementById('errorMessage');
+        const frameDurationSlider = document.getElementById('frameDurationSlider');
+        const frameDurationInput = document.getElementById('frameDuration');
+        const videoContainer = document.getElementById('videoContainer');
+
+        const imageUpload = document.getElementById('imageUpload');
+        const previewImage = document.getElementById('previewImage');
+
+        let uploadedImage = null;
+        let images = [];
+        let extractedImages = [];
+        let prompterAudio = null;
+        let interpolationEnabled = false;
+        let enableProceduralEffect = false;
+
+        generateButton.addEventListener('click', generateImageSequence);
+        generateStoryButton.addEventListener('click', generateAutomaticStory);
+        extractButton.addEventListener('click', extractImagesFromSite);
+        cleanupButton.addEventListener('click', cleanupInvalidImages);
+        previewButton.addEventListener('click', showImagePreview);
+        compileVideoButton.addEventListener('click', compileVideo);
+        frameDurationSlider.addEventListener('input', updateFrameDuration);
+        frameDurationInput.addEventListener('change', updateFrameDurationFromInput);
+        
+        document.getElementById('generateFromUpload').addEventListener('click', generateSequenceFromUpload);
+        
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                    uploadedImage = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        document.getElementById('enableInterpolation').addEventListener('click', () => {
+            interpolationEnabled = !interpolationEnabled;
+            document.getElementById('enableInterpolation').textContent = interpolationEnabled ? 'Desativar Interpolação de Quadros IA' : 'Ativar Interpolação de Quadros IA';
+        });
+
+        document.getElementById('surpriseMeButton').addEventListener('click', surpriseMe);
+        document.getElementById('enableProceduralEffect').addEventListener('change', (e) => {
+            enableProceduralEffect = e.target.checked;
+        });
+
+        async function generateSequenceFromUpload() {
+            if (!uploadedImage) {
+                alert('Por favor, faça o upload de uma imagem primeiro.');
+                return;
+            }
+
+            if (!bodyPixNet || !posenetModel) {
+                progressBar.textContent = 'Carregando modelos de IA...';
+                await new Promise(resolve => {
+                    const checkModel = setInterval(() => {
+                        if (bodyPixNet && posenetModel) {
+                            clearInterval(checkModel);
+                            resolve();
+                        }
+                    }, 100);
+                });
+            }
+
+            imageContainer.innerHTML = '';
+            progressBar.textContent = 'Gerando sequência...';
+
+            const numImages = parseInt(imageCountInput.value);
+
+            try {
+                const baseImg = new Image();
+                await new Promise((resolve) => {
+                    baseImg.onload = resolve;
+                    baseImg.src = uploadedImage;
+                });
+
+                const [segmentation, pose] = await Promise.all([
+                    bodyPixNet.segmentPerson(baseImg),
+                    posenetModel.estimateSinglePose(baseImg)
+                ]);
+
+                const personCanvas = extractPerson(baseImg, segmentation);
+                const backgroundCanvas = extractBackground(baseImg, segmentation);
+
+                for (let i = 0; i < numImages; i++) {
+                    const progress = ((i + 1) / numImages) * 100;
+
+                    const adjustedPose = adjustPose(pose, i, numImages);
+
+                    const warpedPersonCanvas = await warpPerson(personCanvas, pose, adjustedPose);
+
+                    const frameCanvas = combinePersonWithBackground(warpedPersonCanvas, backgroundCanvas);
+
+                    const imgDataUrl = frameCanvas.toDataURL();
+
+                    const imageDiv = document.createElement('div');
+                    imageDiv.classList.add('image');
+                    const img = document.createElement('img');
+                    img.src = imgDataUrl;
+                    img.alt = `Frame ${i + 1}`;
+                    imageDiv.appendChild(img);
+                    imageContainer.appendChild(imageDiv);
+
+                    images.push({
+                        number: i + 1,
+                        url: img.src,
+                        prompt: `Frame ${i + 1}`
+                    });
+
+                    progressBar.textContent = `Gerando frame ${i + 1} de ${numImages} (${progress.toFixed(2)}%)`;
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                progressBar.textContent = 'Sequência gerada com sucesso!';
+            } catch (error) {
+                console.error('Error generating sequence:', error);
+                progressBar.textContent = 'Erro ao gerar sequência';
+                errorMessage.textContent = `Erro: ${error.message}`;
+            }
+        }
+
+        function extractPerson(image, segmentation) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+
+            const personMask = bodyPix.toMask(segmentation);
+            ctx.putImageData(personMask, 0, 0);
+            ctx.globalCompositeOperation = 'source-in';
+            ctx.drawImage(image, 0, 0);
+
+            return canvas;
+        }
+
+        function extractBackground(image, segmentation) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(image, 0, 0);
+            const personMask = bodyPix.toMask(segmentation);
+            ctx.putImageData(personMask, 0, 0);
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.drawImage(canvas, 0, 0);
+
+            return canvas;
+        }
+
+        function adjustPose(pose, frameIndex, totalFrames) {
+            const adjustedPose = JSON.parse(JSON.stringify(pose));
+
+            const movementX = ((frameIndex + 1) / totalFrames) * 20;
+            const movementY = Math.sin(((frameIndex + 1) / totalFrames) * Math.PI * 2) * 5;
+
+            adjustedPose.keypoints.forEach(keypoint => {
+                keypoint.position.x += movementX;
+                keypoint.position.y += movementY;
+            });
+
+            return adjustedPose;
+        }
+
+        async function warpPerson(personCanvas, originalPose, adjustedPose) {
+            const canvas = document.createElement('canvas');
+            canvas.width = personCanvas.width;
+            canvas.height = personCanvas.height;
+            const ctx = canvas.getContext('2d');
+
+            const srcCtx = personCanvas.getContext('2d');
+            const srcData = srcCtx.getImageData(0, 0, personCanvas.width, personCanvas.height);
+            const flowMap = createMotionFlowMap(originalPose, adjustedPose, canvas.width, canvas.height);
+            const outputData = applyAttentionWarp(srcData, flowMap);
+            
+            ctx.putImageData(outputData, 0, 0);
+
+            return canvas;
+        }
+
+        function createMotionFlowMap(originalPose, adjustedPose, width, height) {
+            const flowMap = new Float32Array(width * height * 2);
+            const centerDx = adjustedPose.keypoints[0].position.x - originalPose.keypoints[0].position.x;
+            const centerDy = adjustedPose.keypoints[0].position.y - originalPose.keypoints[0].position.y;
+            for(let y = 0; y < height; y++) {
+                for(let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 2;
+                    const attention = calculatePixelAttention(x, y, originalPose.keypoints);
+                    flowMap[idx] = centerDx * attention;
+                    flowMap[idx + 1] = centerDy * attention;
+                }
+            }
+            return flowMap;
+        }
+
+        function calculatePixelAttention(x, y, keypoints) {
+            let totalAttention = 0;
+            keypoints.forEach(keypoint => {
+                const dx = x - keypoint.position.x;
+                const dy = y - keypoint.position.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                totalAttention += Math.exp(-distance / 100);
+            });
+            return Math.min(1, totalAttention);
+        }
+
+        function applyAttentionWarp(srcData, flowMap) {
+            const width = srcData.width;
+            const height = srcData.height;
+            const outputData = new ImageData(width, height);
+            for(let y = 0; y < height; y++) {
+                for(let x = 0; x < width; x++) {
+                    const flowIdx = (y * width + x) * 2;
+                    const dx = flowMap[flowIdx];
+                    const dy = flowMap[flowIdx + 1];
+                    const color = sampleBilinear(srcData, x - dx, y - dy);
+                    const outIdx = (y * width + x) * 4;
+                    outputData.data[outIdx] = color[0];
+                    outputData.data[outIdx + 1] = color[1];
+                    outputData.data[outIdx + 2] = color[2];
+                    outputData.data[outIdx + 3] = color[3];
+                }
+            }
+            return outputData;
+        }
+
+        function sampleBilinear(imgData, x, y) {
+            const width = imgData.width;
+            const height = imgData.height;
+            x = Math.max(0, Math.min(width - 1, x));
+            y = Math.max(0, Math.min(height - 1, y));
+            const x1 = Math.floor(x);
+            const y1 = Math.floor(y);
+            const x2 = Math.min(x1 + 1, width - 1);
+            const y2 = Math.min(y1 + 1, height - 1);
+            const fx = x - x1;
+            const fy = y - y1;
+            const c11 = getPixel(imgData, x1, y1);
+            const c12 = getPixel(imgData, x1, y2);
+            const c21 = getPixel(imgData, x2, y1);
+            const c22 = getPixel(imgData, x2, y2);
+            const result = new Uint8ClampedArray(4);
+            for(let i = 0; i < 4; i++) {
+                result[i] = Math.round(
+                    c11[i] * (1 - fx) * (1 - fy) +
+                    c12[i] * (1 - fx) * fy +
+                    c21[i] * fx * (1 - fy) +
+                    c22[i] * fx * fy
+                );
+            }
+            return result;
+        }
+
+        function getPixel(imgData, x, y) {
+            const idx = (y * imgData.width + x) * 4;
+            return [
+                imgData.data[idx],
+                imgData.data[idx + 1],
+                imgData.data[idx + 2],
+                imgData.data[idx + 3]
+            ];
+        }
+
+        function combinePersonWithBackground(personCanvas, backgroundCanvas) {
+            const canvas = document.createElement('canvas');
+            canvas.width = personCanvas.width;
+            canvas.height = personCanvas.height;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(backgroundCanvas, 0, 0);
+            ctx.drawImage(personCanvas, 0, 0);
+
+            return canvas;
+        }
+
+        async function compileVideo() {
+            compileProgressBar.style.display = 'block';
+            compileProgressBar.textContent = 'Preparando...';
+            errorMessage.textContent = '';
+
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToUse = useExtractedImages ? extractedImages : images;
+            const frameDuration = parseInt(document.getElementById('frameDuration').value);
+
+            const enableTransitions = document.getElementById('enableTransitions').checked;
+            const enableDiffusionEffect = document.getElementById('enableDiffusionEffect').checked;
+            const addBackgroundMusic = document.getElementById('addBackgroundMusic').checked;
+
+            if (imagesToUse.length === 0) {
+                alert('Nenhuma imagem disponível para compilar o vídeo.');
+                compileProgressBar.style.display = 'none';
+                return;
+            }
+
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const stream = canvas.captureStream(30);
+
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 8000000
+                });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    let videoUrl = URL.createObjectURL(blob);
+
+                    if (addBackgroundMusic) {
+                        videoUrl = await addMusicToVideo(blob);
+                    }
+
+                    compileProgressBar.textContent = 'Vídeo compilado com sucesso!';
+
+                    videoContainer.innerHTML = '';
+                    const videoElement = document.createElement('video');
+                    videoElement.src = videoUrl;
+                    videoElement.controls = true;
+                    videoContainer.appendChild(videoElement);
+
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = videoUrl;
+                    downloadLink.download = 'sequencia_video_hd.webm';
+                    downloadLink.textContent = 'Baixar Vídeo HD WebM';
+                    downloadLink.style.display = 'block';
+                    downloadLink.style.marginTop = '20px';
+                    videoContainer.appendChild(downloadLink);
+
+                    const playWithPromptButton = document.createElement('button');
+                    playWithPromptButton.textContent = 'Reproduzir Prompter';
+                    playWithPromptButton.style.display = 'block';
+                    playWithPromptButton.style.marginTop = '10px';
+                    playWithPromptButton.onclick = togglePrompter;
+                    videoContainer.appendChild(playWithPromptButton);
+
+                    const speechRateControl = document.createElement('div');
+                    speechRateControl.innerHTML = `
+                        <label for="speechRate">Velocidade da fala:</label>
+                        <input type="range" id="speechRate" min="0.5" max="2" step="0.1" value="1">
+                        <span id="speechRateValue">1x</span>
+                    `;
+                    videoContainer.appendChild(speechRateControl);
+
+                    const speechRateSlider = document.getElementById('speechRate');
+                    const speechRateValue = document.getElementById('speechRateValue');
+
+                    speechRateSlider.oninput = () => {
+                        const rate = parseFloat(speechRateSlider.value);
+                        speechRateValue.textContent = `${rate.toFixed(1)}x`;
+                    };
+
+                    addVideoSpeedControl();
+
+                    window.scrollTo(0, 0);
+                };
+
+                mediaRecorder.start();
+
+                for (let i = 0; i < imagesToUse.length - 1; i++) {
+                    const image1 = imagesToUse[i];
+                    const image2 = imagesToUse[i + 1];
+                    const img1 = new Image();
+                    const img2 = new Image();
+                    img1.crossOrigin = "Anonymous";
+                    img2.crossOrigin = "Anonymous";
+                    img1.src = image1.url;
+                    img2.src = image2.url;
+
+                    await Promise.all([
+                        new Promise((resolve) => { img1.onload = resolve; }),
+                        new Promise((resolve) => { img2.onload = resolve; })
+                    ]);
+
+                    if (enableProceduralEffect) {
+                        applyQuantumProcedural(ctx, canvas);
+                    }
+
+                    ctx.drawImage(img1, 0, 0, canvas.width, canvas.height);
+
+                    const progress = ((i + 1) / imagesToUse.length);
+                    
+                    if (interpolationEnabled) {
+                        const interpolated = applyIntelligentInterpolation(img1, img2, progress);
+                        ctx.drawImage(interpolated, 0, 0, canvas.width, canvas.height);
+                    }
+
+                    if (enableDiffusionEffect) {
+                        ctx.filter = 'none'; 
+                        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        imageData = applyDiffusionEffect(imageData);
+                        ctx.putImageData(imageData, 0, 0);
+                        
+                        const overlay = document.createElement('div');
+                        overlay.classList.add('quantum-overlay');
+                        videoContainer.appendChild(overlay);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, frameDuration));
+
+                    if (enableTransitions) {
+                        await applyRandomTransition(ctx, img1, img2, canvas, frameDuration);
+                    }
+
+                    const progressText = ((i + 1) / imagesToUse.length) * 100;
+                    compileProgressBar.textContent = `Processando imagem ${i + 1} de ${imagesToUse.length} (${progressText.toFixed(2)}%)`;
+                }
+
+                mediaRecorder.stop();
+
+            } catch (error) {
+                console.error('Erro ao compilar vídeo:', error);
+                compileProgressBar.textContent = 'Erro ao compilar vídeo.';
+                errorMessage.textContent = `Erro ao compilar vídeo: ${error.message}. Por favor, tente novamente.`;
+            }
+        }
+
+        async function generateAutomaticStory() {
+            const imageCount = parseInt(imageCountInput.value);
+            const theme = storyThemeInput.value || '';
+            const story = await generateStoryPrompt(imageCount, theme);
+            sequenceDescription.value = story;
+        }
+
+        async function generateStoryPrompt(imageCount, theme) {
+            const corpus = `
+                Em um futuro distante, a humanidade alcançou as estrelas.
+                A tecnologia avançada permitiu viagens interdimensionais.
+                Um grupo de exploradores descobriu uma civilização alienígena.
+                Os mistérios do universo começaram a ser desvendados.
+                Inteligências artificiais conviviam harmoniosamente com humanos.
+                A consciência foi transferida para formas de energia pura.
+                Descobriu-se um código que unificava as leis da física.
+                A comunicação telepática tornou-se comum entre seres sencientes.
+                Portais quânticos abriram passagens para múltiplas realidades.
+                A manipulação do tempo tornou-se uma ferramenta de aprendizagem.
+                Seres extradimensionais compartilharam conhecimento com a humanidade.
+                As fronteiras entre o real e o virtual se tornaram indistinguíveis.
+                Energias cósmicas foram canalizadas para curar planetas inteiros.
+            `;
+
+            const sentences = corpus.trim().split('\n').map(s => s.trim());
+            const words = sentences.join(' ').split(' ');
+
+            const markovChain = {};
+            for (let i = 0; i < words.length - 1; i++) {
+                const currentWord = words[i];
+                const nextWord = words[i + 1];
+                if (!markovChain[currentWord]) {
+                    markovChain[currentWord] = [];
+                }
+                markovChain[currentWord].push(nextWord);
+            }
+
+            let prompts = [];
+            for (let i = 0; i < imageCount; i++) {
+                let promptWords = [];
+
+                let currentWord = theme || words[Math.floor(Math.random() * words.length)];
+                promptWords.push(currentWord);
+
+                const promptLength = Math.floor(Math.random() * 7) + 5;
+                for (let j = 0; j < promptLength; j++) {
+                    const nextWords = markovChain[currentWord] || markovChain[words[Math.floor(Math.random() * words.length)]];
+                    currentWord = nextWords[Math.floor(Math.random() * nextWords.length)];
+                    promptWords.push(currentWord);
+                }
+
+                const prompt = `Imagem ${i + 1}: ${promptWords.join(' ')}`;
+                prompts.push(prompt);
+            }
+
+            return prompts.join('\n');
+        }
+
+        async function generateImageSequence() {
+            const prompts = sequenceDescription.value.trim().split('\n');
+            if (prompts.length === 0 || prompts[0] === '') {
+                alert('Por favor, forneça pelo menos um prompt para gerar imagens.');
+                return;
+            }
+
+            imageContainer.innerHTML = '';
+            images = [];
+            const numImages = parseInt(imageCountInput.value);
+
+            progressBar.textContent = 'Gerando imagens...';
+
+            try {
+                for (let i = 0; i < numImages; i++) {
+                    const imageNumber = i + 1;
+                    const progress = ((i + 1) / numImages) * 100;
+                    
+                    const promptIndex = i % prompts.length;
+                    const prompt = prompts[promptIndex].replace(/^Imagem \d+:\s*/i, '').trim();
+                    
+                    const imageUrl = await generateWebSimImage(prompt);
+                    
+                    const imageDiv = document.createElement('div');
+                    imageDiv.classList.add('image');
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = `Imagem ${imageNumber}: ${prompt}`;
+                    imageDiv.appendChild(img);
+                    imageContainer.appendChild(imageDiv);
+
+                    images.push({
+                        number: imageNumber,
+                        url: imageUrl,
+                        prompt: prompt
+                    });
+
+                    progressBar.textContent = `Imagem ${imageNumber} de ${numImages} (${progress.toFixed(2)}%)`;
+
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                progressBar.textContent = 'Todas as imagens foram geradas com sucesso!';
+            } catch (error) {
+                console.error('Erro ao gerar imagens:', error);
+                errorMessage.textContent = `Erro ao gerar imagens: ${error.message}. Por favor, tente novamente.`;
+            }
+        }
+
+        async function generateWebSimImage(prompt) {
+            return `https://via.placeholder.com/1920x1080?text=${encodeURIComponent(prompt)}`;
+        }
+
+        function extractImagesFromSite() {
+            const imageElements = document.querySelectorAll('#imageContainer img');
+            
+            extractedImages = [];
+            extractedImagesContainer.innerHTML = '';
+
+            for (let img of imageElements) {
+                const imageUrl = img.src;
+                const alt = img.alt;
+                
+                if (!imageUrl.includes('placeholder.com')) {
+                    extractedImages.push({
+                        url: imageUrl,
+                        alt: alt
+                    });
+
+                    const imageDiv = document.createElement('div');
+                    imageDiv.classList.add('image');
+                    const imgElement = document.createElement('img');
+                    imgElement.src = imageUrl;
+                    imgElement.alt = alt || 'Extracted Image';
+                    imageDiv.appendChild(imgElement);
+                    extractedImagesContainer.appendChild(imageDiv);
+                }
+            }
+
+            alert(`Extraídas ${extractedImages.length} imagens geradas do site.`);
+        }
+
+        function cleanupInvalidImages() {
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToClean = useExtractedImages ? extractedImages : images;
+
+            const validImages = imagesToClean.filter(image => {
+                const img = new Image();
+                img.src = image.url;
+                return img.complete && img.naturalWidth !== 0 && !isEmptyImage(img) && !isPlaceholderImage(img);
+            });
+
+            if (useExtractedImages) {
+                extractedImages = validImages;
+                updateImageContainer(extractedImagesContainer, validImages);
+            } else {
+                images = validImages;
+                updateImageContainer(imageContainer, validImages);
+            }
+
+            const removedCount = imagesToClean.length - validImages.length;
+            alert(`Limpeza concluída. ${removedCount} imagens inválidas ou vazias foram removidas.`);
+        }
+
+        function isEmptyImage(img) {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            return imageData.data.every(channel => channel === 0 || channel === 255);
+        }
+
+        function isPlaceholderImage(img) {
+            return img.src.includes('placeholder.com');
+        }
+
+        function updateImageContainer(container, images) {
+            container.innerHTML = '';
+            images.forEach(image => {
+                const imageDiv = document.createElement('div');
+                imageDiv.classList.add('image');
+                const imgElement = document.createElement('img');
+                imgElement.src = image.url;
+                imgElement.alt = image.alt || `Imagem ${image.number}: ${image.prompt}`;
+                imageDiv.appendChild(imgElement);
+                container.appendChild(imageDiv);
+            });
+        }
+
+        function showImagePreview() {
+            const useExtractedImages = document.getElementById('useExtractedImages').checked;
+            const imagesToUse = useExtractedImages ? extractedImages : images;
+
+            const previewContainer = document.createElement('div');
+            previewContainer.style.display = 'flex';
+            previewContainer.style.flexWrap = 'wrap';
+            previewContainer.style.justifyContent = 'center';
+            previewContainer.style.gap = '10px';
+
+            imagesToUse.forEach((image, index) => {
+                const imgElement = document.createElement('img');
+                imgElement.src = image.url;
+                imgElement.alt = `Preview ${index + 1}: ${image.prompt || ''}`;
+                imgElement.style.width = '150px';
+                imgElement.style.height = '150px';
+                imgElement.style.objectFit = 'cover';
+                imgElement.style.borderRadius = '5px';
+                previewContainer.appendChild(imgElement);
+            });
+
+            const previewDialog = document.createElement('dialog');
+            previewDialog.style.maxWidth = '90%';
+            previewDialog.style.maxHeight = '90%';
+            previewDialog.style.overflow = 'auto';
+            previewDialog.style.padding = '20px';
+            previewDialog.style.borderRadius = '10px';
+            previewDialog.appendChild(previewContainer);
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Fechar Prévia';
+            closeButton.style.marginTop = '20px';
+            closeButton.onclick = () => previewDialog.close();
+            previewDialog.appendChild(closeButton);
+
+            document.body.appendChild(previewDialog);
+            previewDialog.showModal();
+        }
+
+        function generateAudio(text, rate = 1) {
+            return new Promise((resolve) => {
+                const synth = window.speechSynthesis;
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'pt-BR';
+                utterance.rate = rate;
+                utterance.onend = () => resolve();
+                synth.speak(utterance);
+            });
+        }
+
+        function updateFrameDuration() {
+            const frameDuration = parseInt(frameDurationSlider.value);
+            frameDurationInput.value = frameDuration;
+        }
+
+        function updateFrameDurationFromInput() {
+            const frameDuration = parseInt(frameDurationInput.value);
+            frameDurationSlider.value = frameDuration;
+        }
+
+        function stopPrompter() {
+            if (prompterAudio) {
+                window.speechSynthesis.cancel();
+                prompterAudio = null;
+            }
+        }
+
+        function updatePlayWithPromptButton() {
+            const playWithPromptButton = document.querySelector('#videoContainer button:last-of-type');
+            if (playWithPromptButton) {
+                playWithPromptButton.textContent = prompterAudio ? 'Parar Prompter' : 'Reproduzir Prompter';
+            }
+        }
+
+        function togglePrompter() {
+            const videoElement = document.querySelector('#videoContainer video');
+            if (!videoElement) return;
+
+            if (prompterAudio) {
+                stopPrompter();
+            } else {
+                videoElement.play();
+                const speechRateSlider = document.getElementById('speechRate');
+                const speechRate = parseFloat(speechRateSlider.value);
+                
+                prompterAudio = generateAudio(sequenceDescription.value, speechRate);
+                prompterAudio.then(() => {
+                    prompterAudio = null;
+                    updatePlayWithPromptButton();
+                });
+            }
+            updatePlayWithPromptButton();
+        }
+
+        function addVideoSpeedControl() {
+            const videoSpeedControl = document.createElement('div');
+            videoSpeedControl.innerHTML = `
+                <label for="videoPlaybackRate">Velocidade do vídeo:</label>
+                <input type="range" id="videoPlaybackRate" min="0.1" max="4" step="0.1" value="1">
+                <span id="videoPlaybackRateValue">1x</span>
+            `;
+            videoContainer.appendChild(videoSpeedControl);
+
+            const videoPlaybackRateSlider = document.getElementById('videoPlaybackRate');
+            const videoPlaybackRateValue = document.getElementById('videoPlaybackRateValue');
+            const videoElement = document.querySelector('#videoContainer video');
+
+            videoPlaybackRateSlider.oninput = () => {
+                const rate = parseFloat(videoPlaybackRateSlider.value);
+                videoPlaybackRateValue.textContent = `${rate.toFixed(1)}x`;
+                if (videoElement) {
+                    videoElement.playbackRate = rate;
+                }
+            };
+        }
+
+        async function applyRandomTransition(ctx, img1, img2, canvas, frameDuration) {
+            const transitions = ['fade', 'slide', 'zoom', 'swirl', 'pixelate'];
+            const transition = transitions[Math.floor(Math.random() * transitions.length)];
+
+            switch (transition) {
+                case 'fade':
+                    for (let opacity = 0; opacity <= 1; opacity += 0.1) {
+                        ctx.globalAlpha = 1;
+                        ctx.drawImage(img1, 0, 0, canvas.width, canvas.height);
+                        ctx.globalAlpha = opacity;
+                        ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
+                        await new Promise(resolve => setTimeout(resolve, frameDuration / 10));
+                    }
+                    ctx.globalAlpha = 1;
+                    break;
+                case 'slide':
+                    for (let x = 0; x <= canvas.width; x += canvas.width / 10) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img1, x - canvas.width, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img2, x, 0, canvas.width, canvas.height);
+                        await new Promise(resolve => setTimeout(resolve, frameDuration / 10));
+                    }
+                    break;
+                case 'zoom':
+                    for (let scale = 1; scale <= 1.5; scale += 0.05) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img1, canvas.width * (1 - scale) / 2, canvas.height * (1 - scale) / 2, canvas.width * scale, canvas.height * scale);
+                        await new Promise(resolve => setTimeout(resolve, frameDuration / 10));
+                    }
+                    break;
+                case 'swirl':
+                    for (let i = 0; i <= 20; i++) {
+                        ctx.save();
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.translate(canvas.width / 2, canvas.height / 2);
+                        ctx.rotate((Math.PI / 10) * (i / 20));
+                        ctx.drawImage(img1, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
+                        ctx.restore();
+                        await new Promise(resolve => setTimeout(resolve, frameDuration / 20));
+                    }
+                    break;
+                case 'pixelate':
+                    for (let size = 50; size >= 1; size -= 5) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
+                        ctx.globalAlpha = 0.5;
+                        ctx.drawImage(img1, 0, 0, canvas.width, canvas.height);
+                        ctx.globalAlpha = 1;
+                        ctx.drawImage(canvas, 0, 0, canvas.width / size, canvas.height / size, 0, 0, canvas.width, canvas.height);
+                        await new Promise(resolve => setTimeout(resolve, frameDuration / 10));
+                    }
+                    break;
+            }
+        }
+
+        async function addMusicToVideo(videoBlob) {
+            const musicUrl = 'background-music.mp3';
+            const musicResponse = await fetch(musicUrl);
+            const musicData = await musicResponse.arrayBuffer();
+
+            const videoResponse = new Response(videoBlob);
+            const videoData = await videoResponse.arrayBuffer();
+
+            alert('Música de fundo adicionada ao vídeo!');
+
+            return URL.createObjectURL(videoBlob);
+        }
+
+        compileVideoButton.addEventListener('click', compileVideo);
+
+        function applyDiffusionEffect(imageData) {
+            const data = imageData.data;
+            const width = imageData.width;
+            const height = imageData.height;
+            
+            const intensity = parseFloat(document.getElementById('diffusionIntensity').value);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = (Math.random() - 0.5) * intensity * 50;
+                
+                data[i] = Math.min(255, Math.max(0, data[i] + noise)); // Red
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise)); // Green  
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise)); // Blue
+                
+                if (Math.random() < intensity * 0.1) {
+                    const targetIndex = (Math.random() * data.length) & ~3;
+                    [data[i], data[targetIndex]] = [data[targetIndex], data[i]];
+                    [data[i + 1], data[targetIndex + 1]] = [data[targetIndex + 1], data[i + 1]];
+                    [data[i + 2], data[targetIndex + 2]] = [data[targetIndex + 2], data[i + 2]];
+                }
+            }
+            
+            return imageData;
+        }
+
+        function applyQuantumProcedural(ctx, canvas) {
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            for (let i = 0; i < width; i += 20) {
+                for (let j = 0; j < height; j += 20) {
+                    const phase = Math.sin((i + j) * 0.1) * Math.cos(Date.now() * 0.001);
+                    ctx.globalAlpha = Math.abs(phase) * 0.1;
+                    ctx.fillRect(i, j, 10, 10);
+                }
+            }
+            
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const x1 = Math.random() * width;
+                const y1 = Math.random() * height;
+                const x2 = Math.random() * width;
+                const y2 = Math.random() * height;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+            }
+            ctx.stroke();
+        }
+
+        function applyIntelligentInterpolation(img1, img2, progress) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img1.width;
+            canvas.height = img1.height;
+            
+            ctx.globalAlpha = 1 - progress;
+            ctx.drawImage(img1, 0, 0);
+            ctx.globalAlpha = progress;
+            ctx.drawImage(img2, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                const edge = Math.abs(brightness - ((data[i - 4] || 0) + (data[i + 4] || 0)) / 3);
+                
+                if (edge > 30) {
+                    data[i] *= 1.2;     // Red
+                    data[i + 1] *= 1.2; // Green
+                    data[i + 2] *= 1.2; // Blue
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            return canvas;
+        }
+
+        updateFrameDuration();
+    </script>
+</body>
+</html>
